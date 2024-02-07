@@ -1,9 +1,21 @@
 """BKK Futar API Client"""
 
+import os
 from enum import Enum
+
 from pydantic import BaseModel, AwareDatetime
+import requests
 
 from home_bkk_futar.types import ArrivalsAndDeparturesForStopOTPMethodResponse
+from home_bkk_futar.utils import equal_divide, sign_by_stop_from_string
+
+# Futar API endpoint settings and extra params to include in request (other than API key and stops)
+BASE_URL = "https://futar.bkk.hu/api/query/v1/ws"
+ENDPOINT = "/otp/api/where/arrivals-and-departures-for-stop"
+EXTRA_PARAMS = {"minutesBefore": 0}
+
+# Stops and corresponding strings to use on the display - comes from secret
+SIGN_BY_STOP = sign_by_stop_from_string(os.environ.get("BKK_FUTAR_SIGN_BY_STOP"), "|", ",")
 
 
 class Reliability(Enum):
@@ -22,6 +34,20 @@ class StopTime(BaseModel):
     headsign: str  # Shows where the trip is heading, e.g. `Óbuda, Bogdáni út`
     departure_seconds: int  # In how many seconds (compared to now) will the trip leave
     reliability: Reliability  # How reliable is given time entry
+
+    def format(self, chars: int) -> str:
+        """Format a single stop time item, that is, one row (one arriving vehicle) on the display"""
+        headsign_chars = chars - 9  # stop sign (2) + route name (4) + departure minutes (3)
+        return (
+            SIGN_BY_STOP[self.stop_id].ljust(2)
+            + self.route_name.ljust(4)
+            + self.headsign[: headsign_chars - 1].strip(",").ljust(headsign_chars)
+            + (
+                "   "
+                if self.departure_seconds <= 30
+                else f"{round(self.departure_seconds / 60):2d}'"
+            )
+        )
 
 
 class Display(BaseModel):
@@ -62,3 +88,42 @@ class Display(BaseModel):
                     )
                 )
         return cls(current_time=response.currentTime, stop_times=stop_times)
+
+    @classmethod
+    def request_new(cls) -> "Display":
+        """Make a new request and derive the display object from it"""
+        params = {
+            "key": os.environ["BKK_FUTAR_API_KEY"],
+            "stopId": list(SIGN_BY_STOP.keys()),
+            **EXTRA_PARAMS,
+        }
+        response = requests.get(BASE_URL + ENDPOINT, params=params)
+        response.raise_for_status()
+        return Display.from_response(
+            ArrivalsAndDeparturesForStopOTPMethodResponse(**response.json())
+        )
+
+    def format(self, lines: int, chars: int) -> list[str]:
+        """
+        Format the stop times using available character height (lines) & width (chars),
+        return a list of rows to display on the matrix.
+        """
+        # Use equal-divide to determine the number of lines given to each stop
+        lines_by_stop = {
+            stop_id: stop_lines
+            for stop_id, stop_lines in zip(SIGN_BY_STOP, equal_divide(lines, len(SIGN_BY_STOP)))
+        }
+        # Loop once through stop times and only format if needed
+        formats_by_stop = {stop_id: [] for stop_id in SIGN_BY_STOP}
+        for stop_time in self.stop_times:
+            if len(formats_by_stop[stop_time.stop_id]) < lines_by_stop[stop_time.stop_id]:
+                formats_by_stop[stop_time.stop_id].append(stop_time.format(chars=chars))
+
+        # If we don't have the allotted number of stop times for each stop, append empties
+        return sum(
+            (
+                formats + [""] * (lines_by_stop[stop_id] - len(formats))
+                for stop_id, formats in formats_by_stop.items()
+            ),
+            [],
+        )
