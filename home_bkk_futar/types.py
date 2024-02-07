@@ -4,7 +4,7 @@ https://editor.swagger.io/?url=https://opendata.bkk.hu/docs/futar-openapi.yaml
 """
 
 import datetime as dt
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, PositiveInt
 
@@ -14,10 +14,10 @@ class TransitRoute(BaseModel):
 
     id: str
     shortName: str
-    longName: str | None = None
-    description: str | None = None
+    longName: Optional[str] = None
+    description: Optional[str] = None
     type: str
-    url: str | None = None
+    url: Optional[str] = None
     agencyId: str
     bikesAllowed: bool
     style: dict[str, Any]  # TransitRouteStyle
@@ -34,14 +34,14 @@ class TransitStop(BaseModel):
     name: str
     code: str
     direction: str
-    platformCode: str | None = None
-    description: str | None = None
+    platformCode: Optional[str] = None
+    description: Optional[str] = None
     locationType: int
-    locationSubType: str | None = None
-    parentStationId: str | None = None
+    locationSubType: Optional[str] = None
+    parentStationId: Optional[str] = None
     wheelchairBoarding: bool
     routeIds: list[str]
-    alertIds: list[str] | None = None
+    alertIds: Optional[list[str]] = None
     style: dict[str, Any]  # TransitStopStyle
 
 
@@ -51,11 +51,11 @@ class TransitTrip(BaseModel):
     id: str
     routeId: str
     shapeId: str
-    blockId: str | None = None
+    blockId: Optional[str] = None
     tripHeadsign: str
-    tripShortName: str | None = None
+    tripShortName: Optional[str] = None
     serviceId: str
-    directionId: str | None = None  # Not optional according to schema but doesn't always appear
+    directionId: Optional[str] = None  # Not optional according to schema but doesn't always appear
     bikesAllowed: bool
     wheelchairAccessible: bool
 
@@ -70,12 +70,12 @@ class TransitAlert(BaseModel):
     modifiedTime: dt.datetime
     stopIds: list[str]
     routeIds: list[str]
-    url: dict[str, Any] | None = None  # TranslatedString
-    header: dict[str, Any] | None = None  # TranslatedString
-    description: dict[str, Any] | None = None  # TranslatedString
-    disableApp: bool | None = None
-    startText: dict[str, Any] | None = None  # TranslatedString
-    endText: dict[str, Any] | None = None  # TranslatedString
+    url: Optional[dict[str, Any]] = None  # TranslatedString
+    header: Optional[dict[str, Any]] = None  # TranslatedString
+    description: Optional[dict[str, Any]] = None  # TranslatedString
+    disableApp: Optional[bool] = None
+    startText: Optional[dict[str, Any]] = None  # TranslatedString
+    endText: Optional[dict[str, Any]] = None  # TranslatedString
     routes: list[dict[str, Any]]  # TransitAlertRoute
 
 
@@ -94,15 +94,15 @@ class TransitScheduleStopTime(BaseModel):
 
     stopId: str
     stopHeadsign: str
-    arrivalTime: dt.datetime | None = None
-    departureTime: dt.datetime | None = None
-    predictedArrivalTime: dt.datetime | None = None
-    predictedDepartureTime: dt.datetime | None = None
-    uncertain: bool | None = None
+    arrivalTime: Optional[dt.datetime] = None
+    departureTime: Optional[dt.datetime] = None
+    predictedArrivalTime: Optional[dt.datetime] = None
+    predictedDepartureTime: Optional[dt.datetime] = None
+    uncertain: Optional[bool] = None
     tripId: str
     serviceDate: str
-    wheelchairAccessible: bool | None = None
-    mayRequireBooking: bool | None = None
+    wheelchairAccessible: Optional[bool] = None
+    mayRequireBooking: Optional[bool] = None
 
 
 class TransitArrivalsAndDepartures(BaseModel):
