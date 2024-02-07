@@ -1,0 +1,4 @@
+black
+jupyter == 1.*
+
+-r requirements.txt
