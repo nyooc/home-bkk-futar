@@ -1,6 +1,7 @@
 """BKK Futar API Client"""
 
 import os
+from zoneinfo import ZoneInfo
 from enum import Enum
 
 from pydantic import BaseModel, AwareDatetime
@@ -17,9 +18,21 @@ EXTRA_PARAMS = {"minutesBefore": 0}
 # Stops and corresponding strings to use on the display - comes from secret
 SIGN_BY_STOP = sign_by_stop_from_string(os.environ.get("BKK_FUTAR_SIGN_BY_STOP"), "|", ",")
 
+# Configuration only used when printing a Display object for debugging reasons
+STOP_TIME_SEP = " | "  # Separate elements of a single stop time using this string
+LOCAL_TZ = "Europe/Budapest"  # Show the current (server) time to this timezone
+
 
 class Reliability(Enum):
-    """Allowed reliability values for the departure information of one stop time entry"""
+    """
+    Allowed reliability values for the departure information of one stop time entry. The official
+    application colours the stop times based on these categories:
+    - LIVE (green) means the vehicle has already departed the terminus and has its "BKK Futar box"
+      up and running, so its position - and the arrival time to our stop - can be determined.
+    - SCHEDULED (black) means the vehicle hasn't yet departed or doesn't have a signal, but the
+      vehicle should be on the way. We get the scheduled arrival time.
+    - UNCERTAIN (orange) is an explicit signal that there is some problem with the vehicle.
+    """
 
     LIVE = "live"  # When `TransitScheduleStopTime.predictedDepartureTime` explicitly exists
     SCHEDULED = "scheduled"  # When only the scheduled departure time exists but not uncertain
@@ -27,7 +40,10 @@ class Reliability(Enum):
 
 
 class StopTime(BaseModel):
-    """Stop Time for one trip at a stop, corresponds to one line on the matrix display"""
+    """
+    Stop Time for one trip at a stop, corresponds to one line on the matrix display. We derive this
+    directly from `types.TransitScheduleStopTime`, extracting information we need for the display.
+    """
 
     stop_id: str  # ID of the stop to distinguish multiple stops, e.g. `BKK_F00247`
     route_name: str  # Name of route, corresponds to `TransitRoute.shortName`, e.g. `9`
@@ -35,8 +51,22 @@ class StopTime(BaseModel):
     departure_seconds: int  # In how many seconds (compared to now) will the trip leave
     reliability: Reliability  # How reliable is given time entry
 
+    def __str__(self):
+        """Pretty print to a single human-readable row, useful for debugging"""
+        return (
+            SIGN_BY_STOP[self.stop_id].ljust(2)
+            + STOP_TIME_SEP
+            + self.route_name.ljust(4)
+            + STOP_TIME_SEP
+            + self.headsign.ljust(35)
+            + STOP_TIME_SEP
+            + f"{self.departure_seconds // 60:2d}:{self.departure_seconds % 60:02d}"
+            + STOP_TIME_SEP
+            + self.reliability.name.ljust(9)
+        )
+
     def format(self, chars: int) -> str:
-        """Format a single stop time item, that is, one row (one arriving vehicle) on the display"""
+        """Format a single stop time item, corresponding to a row on the display, to given chars"""
         headsign_chars = chars - 9  # stop sign (2) + route name (4) + departure minutes (3)
         return (
             SIGN_BY_STOP[self.stop_id].ljust(2)
@@ -51,10 +81,20 @@ class StopTime(BaseModel):
 
 
 class Display(BaseModel):
-    """All stop times to display, plus any needed components"""
+    """Central structure, holds all needed stop times to display, plus the current server time"""
 
     current_time: AwareDatetime
     stop_times: list[StopTime]
+
+    def __str__(self):
+        """Pretty print to a structured, table-like output, useful for debugging"""
+        return (
+            self.current_time.astimezone(ZoneInfo(LOCAL_TZ)).strftime("%Y-%m-%d %H:%M:%S (UTC%z)")
+            + "\n"
+            + "=" * (4 * len(STOP_TIME_SEP) + 55)
+            + "\n"
+            + "\n".join(str(stop_time) for stop_time in self.stop_times)
+        )
 
     @classmethod
     def from_response(cls, response: ArrivalsAndDeparturesForStopOTPMethodResponse) -> "Display":
