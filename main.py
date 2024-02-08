@@ -2,16 +2,24 @@
 """Direct RGB Matrix manipulation, main event loop of home-bkk-futar"""
 import sys
 import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
+from home_bkk_futar.client import Display
 
 # See rpi_rgb_led_matrix/fonts folder for available {W}x{H}{SUFFIX}.bdf files
-FONT_WIDTH = 9
-FONT_HEIGHT = 18
-FONT_SUFFIX = "B"
+FONT_WIDTH = 6
+FONT_HEIGHT = 12
+FONT_SUFFIX = ""
+
+# Indention of text rows relative to origin at upper left
+X_INDENT = 1  # This way a one-pixel column at left will be always blank - won't harm at right end
+Y_INDENT = -1  # This helps center the text for high fonts such as 6x12
 
 # Time between canvas updates
-TICK_SECONDS = 0.2
+TICK_SECONDS = 30
 
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
@@ -52,11 +60,22 @@ def main():
     canvas = matrix.CreateFrameCanvas()
 
     while True:
-        canvas.Clear()
-        graphics.DrawText(canvas, font, 10, 24, color, time.strftime("%H:%M:%S", time.localtime()))
+        display = Display.request_new()
 
-        time.sleep(TICK_SECONDS)
+        canvas.Clear()
+        for i, line in enumerate(
+            display.format(
+                lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
+                chars=RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH,
+            )
+        ):
+            if line:
+                graphics.DrawText(
+                    canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line
+                )
+
         canvas = matrix.SwapOnVSync(canvas)
+        time.sleep(TICK_SECONDS)
 
 
 # Main function
