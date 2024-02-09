@@ -1,4 +1,5 @@
 black
 jupyter == 1.*
+bdfparser == 2.*
 
 -r requirements.txt

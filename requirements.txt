@@ -2,4 +2,5 @@ requests == 2.*
 pydantic == 2.*
 pillow == 10.*
 python-dotenv == 1.*
-rgbmatrix @ git+ssh://git@github.com/hzeller/rpi-rgb-led-matrix.git#egg=rgbmatrix&subdirectory=bindings/python
+# Doesn't work direcly, must install it via running setup.py as instructed in readme
+# rgbmatrix @ git+ssh://git@github.com/hzeller/rpi-rgb-led-matrix.git#egg=rgbmatrix&subdirectory=bindings/python
