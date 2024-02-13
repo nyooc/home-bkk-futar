@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Direct RGB Matrix manipulation, main event loop of home-bkk-futar"""
+import logging
+import os
 import sys
 import time
 from dotenv import load_dotenv
@@ -8,6 +10,11 @@ load_dotenv()
 
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from home_bkk_futar.client import Display
+
+
+# Set logging with a level acquired from environment variable
+logging.basicConfig(level=os.environ["BKK_FUTAR_LOGGING_LEVEL"])
+LOGGER = logging.getLogger(__name__)
 
 # See rpi_rgb_led_matrix/fonts folder for available {W}x{H}{SUFFIX}.bdf files
 FONT_WIDTH = 6
@@ -61,6 +68,7 @@ def main():
 
     while True:
         display = Display.request_new()
+        LOGGER.debug(display)
 
         canvas.Clear()
         for i, line in enumerate(
@@ -81,8 +89,8 @@ def main():
 # Main function
 if __name__ == "__main__":
     try:
-        print("Press CTRL-C to exit")
+        LOGGER.info("Home BKK Futar - Starting up (Press CTRL-C to exit)")
         main()
     except KeyboardInterrupt:
-        print("Exiting\n")
+        LOGGER.info("Home BKK Futar- Exiting on KeyboardInterrupt")
         sys.exit(0)
