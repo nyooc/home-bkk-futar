@@ -25,8 +25,9 @@ FONT_SUFFIX = ""
 X_INDENT = 1  # This way a one-pixel column at left will be always blank - won't harm at right end
 Y_INDENT = -1  # This helps center the text for high fonts such as 6x12
 
-# Time between canvas updates
-TICK_SECONDS = 30
+# API request & canvas refresh timing
+REFRESH_SECONDS = 15  # Time between canvas updates
+REQUEST_MULTIPLIER = 2  # Make an API request after this many canvas updates
 
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
@@ -66,9 +67,12 @@ def main():
     matrix = RGBMatrix(options=options)
     canvas = matrix.CreateFrameCanvas()
 
+    i_request = 0
     while True:
-        display = Display.request_new()
-        LOGGER.debug(display)
+        if not i_request:
+            display = Display.request_new()
+            LOGGER.debug(display)
+        i_request = (i_request + 1) % REQUEST_MULTIPLIER
 
         canvas.Clear()
         for i, line in enumerate(
@@ -83,7 +87,7 @@ def main():
                 )
 
         canvas = matrix.SwapOnVSync(canvas)
-        time.sleep(TICK_SECONDS)
+        time.sleep(REFRESH_SECONDS)
 
 
 # Main function
