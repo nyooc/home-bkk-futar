@@ -1,8 +1,10 @@
 """BKK Futar API Client"""
 
+import datetime as dt
 import os
 from zoneinfo import ZoneInfo
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, AwareDatetime
 import requests
@@ -17,10 +19,13 @@ EXTRA_PARAMS = {"minutesBefore": 0}
 
 # Stops and corresponding strings to use on the display - comes from secret
 SIGN_BY_STOP = sign_by_stop_from_string(os.environ.get("BKK_FUTAR_SIGN_BY_STOP"), "|", ",")
+# Don't display stop times that are leaving (have left) earlier than this, compared to machine time
+MIN_DEPARTURE_SECONDS = -10
 
 # Configuration only used when printing a Display object for debugging reasons
 STOP_TIME_SEP = " | "  # Separate elements of a single stop time using this string
-LOCAL_TZ = "Europe/Budapest"  # Show the current (server) time to this timezone
+LOCAL_TZ = "Europe/Budapest"  # Show the local and server time in this timezone
+TIME_FORMAT = "%Y-%m-%d %H:%M:%S (UTC%z)"  # Show the local and server time in this format
 
 
 class Reliability(Enum):
@@ -48,11 +53,12 @@ class StopTime(BaseModel):
     stop_id: str  # ID of the stop to distinguish multiple stops, e.g. `BKK_F00247`
     route_name: str  # Name of route, corresponds to `TransitRoute.shortName`, e.g. `9`
     headsign: str  # Shows where the trip is heading, e.g. `Óbuda, Bogdáni út`
-    departure_seconds: int  # In how many seconds (compared to now) will the trip leave
+    departure_time: AwareDatetime  # When will the trip leave the stop
     reliability: Reliability  # How reliable is given time entry
 
     def __str__(self):
         """Pretty print to a single human-readable row, useful for debugging"""
+        departure_seconds = self.get_departure_seconds()
         return (
             SIGN_BY_STOP[self.stop_id].ljust(2)
             + STOP_TIME_SEP
@@ -60,37 +66,40 @@ class StopTime(BaseModel):
             + STOP_TIME_SEP
             + self.headsign.ljust(35)
             + STOP_TIME_SEP
-            + f"{self.departure_seconds // 60:2d}:{self.departure_seconds % 60:02d}"
+            + f"{departure_seconds // 60:2d}:{departure_seconds % 60:02d}"
             + STOP_TIME_SEP
             + self.reliability.name.ljust(9)
         )
 
+    def get_departure_seconds(self, now: Optional[AwareDatetime] = None) -> int:
+        """In how many seconds (compared to now) will the trip leave the stop"""
+        return int(
+            (self.departure_time - (now or dt.datetime.now(tz=dt.timezone.utc))).total_seconds()
+        )
+
     def format(self, chars: int) -> str:
         """Format a single stop time item, corresponding to a row on the display, to given chars"""
+        departure_seconds = self.get_departure_seconds()
         headsign_chars = chars - 9  # stop sign (2) + route name (4) + departure minutes (3)
         return (
             SIGN_BY_STOP[self.stop_id].ljust(2)
             + self.route_name.ljust(4)
             + self.headsign[: headsign_chars - 1].strip(",").ljust(headsign_chars)
-            + (
-                "   "
-                if self.departure_seconds <= 30
-                else f"{round(self.departure_seconds / 60):2d}'"
-            )
+            + ("   " if departure_seconds <= 30 else f"{round(departure_seconds / 60):2d}'")
         )
 
 
 class Display(BaseModel):
     """Central structure, holds all needed stop times to display, plus the current server time"""
 
-    current_time: AwareDatetime
+    server_time: AwareDatetime
     stop_times: list[StopTime]
 
     def __str__(self):
         """Pretty print to a structured, table-like output, useful for debugging"""
         return (
-            self.current_time.astimezone(ZoneInfo(LOCAL_TZ)).strftime("%Y-%m-%d %H:%M:%S (UTC%z)")
-            + "\n"
+            f"Machine: {dt.datetime.now(tz=ZoneInfo(LOCAL_TZ)).strftime(TIME_FORMAT)}\n"
+            f"Server: {self.server_time.astimezone(ZoneInfo(LOCAL_TZ)).strftime(TIME_FORMAT)}\n"
             + "=" * (4 * len(STOP_TIME_SEP) + 55)
             + "\n"
             + "\n".join(str(stop_time) for stop_time in self.stop_times)
@@ -108,17 +117,16 @@ class Display(BaseModel):
                 trip = response.data.references.trips[stop_time.tripId]
                 route = response.data.references.routes[trip.routeId]
                 no_prediction = stop_time.predictedDepartureTime is None
-                departure_time = (
-                    stop_time.departureTime if no_prediction else stop_time.predictedDepartureTime
-                )
 
                 stop_times.append(
                     StopTime(
                         stop_id=stop_time.stopId,
                         route_name=route.shortName,
                         headsign=stop_time.stopHeadsign,
-                        departure_seconds=int(
-                            (departure_time - response.currentTime).total_seconds()
+                        departure_time=(
+                            stop_time.departureTime
+                            if no_prediction
+                            else stop_time.predictedDepartureTime
                         ),
                         reliability=(
                             Reliability.UNCERTAIN
@@ -127,7 +135,7 @@ class Display(BaseModel):
                         ),
                     )
                 )
-        return cls(current_time=response.currentTime, stop_times=stop_times)
+        return cls(server_time=response.currentTime, stop_times=stop_times)
 
     @classmethod
     def request_new(cls) -> "Display":
@@ -143,10 +151,21 @@ class Display(BaseModel):
             ArrivalsAndDeparturesForStopOTPMethodResponse(**response.json())
         )
 
+    def get_upcoming_stop_times(
+        self, min_departure_seconds: int = MIN_DEPARTURE_SECONDS
+    ) -> list[StopTime]:
+        """Only return those stop times which are not earlier than indicated by minimum seconds"""
+        now = dt.datetime.now(tz=dt.timezone.utc)
+        return [
+            stop_time
+            for stop_time in self.stop_times
+            if stop_time.get_departure_seconds(now) >= min_departure_seconds
+        ]
+
     def format(self, lines: int, chars: int) -> list[str]:
         """
-        Format the stop times using available character height (lines) & width (chars),
-        return a list of rows to display on the matrix.
+        Format the first few upcoming stop times using available character height (lines) & width
+        (chars), return a list of text rows to display on the matrix.
         """
         # Use equal-divide to determine the number of lines given to each stop
         lines_by_stop = {
@@ -155,7 +174,7 @@ class Display(BaseModel):
         }
         # Loop once through stop times and only format if needed
         formats_by_stop = {stop_id: [] for stop_id in SIGN_BY_STOP}
-        for stop_time in self.stop_times:
+        for stop_time in self.get_upcoming_stop_times():
             if len(formats_by_stop[stop_time.stop_id]) < lines_by_stop[stop_time.stop_id]:
                 formats_by_stop[stop_time.stop_id].append(stop_time.format(chars=chars))
 
