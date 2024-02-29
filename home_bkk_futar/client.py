@@ -4,23 +4,29 @@ import datetime as dt
 import os
 from zoneinfo import ZoneInfo
 from enum import Enum
-from typing import Optional
+from typing import Any, Iterable, Optional, Union
 
 from pydantic import BaseModel, AwareDatetime
-import requests
+from requests import Session
 
 from home_bkk_futar.types import ArrivalsAndDeparturesForStopOTPMethodResponse
 from home_bkk_futar.utils import equal_divide, sign_by_stop_from_string
-
-# Futar API endpoint settings and extra params to include in request (other than API key and stops)
-BASE_URL = "https://futar.bkk.hu/api/query/v1/ws"
-ENDPOINT = "/otp/api/where/arrivals-and-departures-for-stop"
-EXTRA_PARAMS = {"minutesBefore": 0}
 
 # Stops and corresponding strings to use on the display - comes from secret
 SIGN_BY_STOP = sign_by_stop_from_string(os.environ.get("BKK_FUTAR_SIGN_BY_STOP"), "|", ",")
 # Don't display stop times that are leaving (have left) earlier than this, compared to machine time
 MIN_DEPARTURE_SECONDS = -10
+
+# Futar API endpoint settings
+BASE_URL = "https://futar.bkk.hu/api/query/v1/ws"
+ENDPOINT = "/otp/api/where/arrivals-and-departures-for-stop"
+
+# Packing it up: these will be the GET request parameters going to BKK Futar
+PARAMS = (
+    ("key", os.environ.get("BKK_FUTAR_API_KEY")),
+    ("stopId", list(SIGN_BY_STOP.keys())),
+    ("minutesBefore", 0),
+)
 
 # Configuration only used when printing a Display object for debugging reasons
 STOP_TIME_SEP = " | "  # Separate elements of a single stop time using this string
@@ -138,18 +144,25 @@ class Display(BaseModel):
         return cls(server_time=response.currentTime, stop_times=stop_times)
 
     @classmethod
-    def request_new(cls) -> "Display":
+    def request_new(
+        cls,
+        params: Union[dict[str, Any], Iterable[tuple[str, Any]]] = PARAMS,
+        session: Optional[Session] = None,
+    ) -> "Display":
         """Make a new request and derive the display object from it"""
-        params = {
-            "key": os.environ["BKK_FUTAR_API_KEY"],
-            "stopId": list(SIGN_BY_STOP.keys()),
-            **EXTRA_PARAMS,
-        }
-        response = requests.get(BASE_URL + ENDPOINT, params=params)
-        response.raise_for_status()
-        return Display.from_response(
-            ArrivalsAndDeparturesForStopOTPMethodResponse(**response.json())
-        )
+
+        def display_from_session(session: Session):
+            """Do the request itself inside the session context"""
+            response = session.get(BASE_URL + ENDPOINT, params=dict(params))
+            response.raise_for_status()
+            return Display.from_response(
+                ArrivalsAndDeparturesForStopOTPMethodResponse(**response.json())
+            )
+
+        if not session:
+            with Session() as session:
+                return display_from_session(session)
+        return display_from_session(session)
 
     def get_upcoming_stop_times(
         self, min_departure_seconds: int = MIN_DEPARTURE_SECONDS

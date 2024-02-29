@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+from requests import Session
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -68,26 +69,27 @@ def main():
     canvas = matrix.CreateFrameCanvas()
 
     i_request = 0
-    while True:
-        if not i_request:
-            display = Display.request_new()
-            LOGGER.debug(display)
-        i_request = (i_request + 1) % REQUEST_MULTIPLIER
+    with Session() as session:
+        while True:
+            if not i_request:
+                display = Display.request_new(session=session)
+                LOGGER.debug(display)
+            i_request = (i_request + 1) % REQUEST_MULTIPLIER
 
-        canvas.Clear()
-        for i, line in enumerate(
-            display.format(
-                lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
-                chars=RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH,
-            )
-        ):
-            if line:
-                graphics.DrawText(
-                    canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line
+            canvas.Clear()
+            for i, line in enumerate(
+                display.format(
+                    lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
+                    chars=RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH,
                 )
+            ):
+                if line:
+                    graphics.DrawText(
+                        canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line
+                    )
 
-        canvas = matrix.SwapOnVSync(canvas)
-        time.sleep(REFRESH_SECONDS)
+            canvas = matrix.SwapOnVSync(canvas)
+            time.sleep(REFRESH_SECONDS)
 
 
 # Main function
