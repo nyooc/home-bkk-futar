@@ -11,6 +11,7 @@ load_dotenv()
 
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from home_bkk_futar.client import Display
+from home_bkk_futar.utils import get_rgb_color
 
 
 # Set logging with a level acquired from environment variable
@@ -59,10 +60,9 @@ def main():
     for key, value in RGB_MATRIX_OPTIONS.items():
         setattr(options, key, value)
 
-    # Font and color loading
+    # Load the font
     font = graphics.Font()
     font.LoadFont(f"rpi_rgb_led_matrix/fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf")
-    color = graphics.Color(255, 0, 255)
 
     # Matrix initialization
     matrix = RGBMatrix(options=options)
@@ -85,7 +85,12 @@ def main():
             ):
                 if line:
                     graphics.DrawText(
-                        canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line
+                        canvas,
+                        font,
+                        X_INDENT,
+                        (i + 1) * FONT_HEIGHT + Y_INDENT,
+                        graphics.Color(*get_rgb_color(display.server_time)),
+                        line,
                     )
 
             canvas = matrix.SwapOnVSync(canvas)
