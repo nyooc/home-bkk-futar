@@ -24,8 +24,8 @@ FONT_HEIGHT = 12
 FONT_SUFFIX = ""
 
 # Indention of text rows relative to origin at upper left
-X_INDENT = 1  # This way a one-pixel column at left will be always blank - won't harm at right end
-Y_INDENT = -1  # This helps center the text for high fonts such as 6x12
+X_INDENT = 2  # This many columns at left will be blank - won't harm at right, apostrophe is small
+Y_INDENT = -2  # Helps center the text for high fonts that have no pixels at the top such as 6x12
 
 # API request & canvas refresh timing
 REFRESH_SECONDS = 15  # Time between canvas updates
