@@ -52,7 +52,26 @@ RGB_MATRIX_OPTIONS = {
 }
 
 
-def main():
+def draw(display: Display, canvas, font) -> None:
+    """Draw the display contents on the canvas using specified font"""
+    for i, line in enumerate(
+        display.format(
+            lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
+            chars=RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH,
+        )
+    ):
+        if line:
+            graphics.DrawText(
+                canvas,
+                font,
+                X_INDENT,
+                (i + 1) * FONT_HEIGHT + Y_INDENT,
+                graphics.Color(*get_rgb_color(display.server_time)),
+                line,
+            )
+
+
+def main() -> None:
     """Main event loop of home-bkk-futar"""
 
     # Configuration for the matrix
@@ -77,22 +96,7 @@ def main():
             i_request = (i_request + 1) % REQUEST_MULTIPLIER
 
             canvas.Clear()
-            for i, line in enumerate(
-                display.format(
-                    lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
-                    chars=RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH,
-                )
-            ):
-                if line:
-                    graphics.DrawText(
-                        canvas,
-                        font,
-                        X_INDENT,
-                        (i + 1) * FONT_HEIGHT + Y_INDENT,
-                        graphics.Color(*get_rgb_color(display.server_time)),
-                        line,
-                    )
-
+            draw(display, canvas, font)
             canvas = matrix.SwapOnVSync(canvas)
             time.sleep(REFRESH_SECONDS)
 
