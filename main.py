@@ -28,8 +28,10 @@ X_INDENT = 2  # This many columns at left will be blank - won't harm at right, a
 Y_INDENT = -2  # Helps center the text for high fonts that have no pixels at the top such as 6x12
 
 # API request & canvas refresh timing
-REFRESH_SECONDS = 15  # Time between canvas updates
-REQUEST_MULTIPLIER = 2  # Make an API request after this many canvas updates
+TICK_SECONDS = 10  # Time between ticks (canvas updates)
+REQUEST_TICKS = 3  # In usual mode, make an API request to BKK after each this many ticks
+ERROR_TICKS_SEQUENCE = [1, 2, 4, 8, 16]  # In error mode, make API requests in these ticks (backoff)
+ERROR_TICKS = 30  # In error mode, after backoff, make API requests after each this many ticks
 
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
@@ -50,6 +52,36 @@ RGB_MATRIX_OPTIONS = {
     "disable_hardware_pulsing": True,  # led-no-hardware-pulse
     "drop_privileges": True,  # led-no-drop-privs (DEFAULT)
 }
+
+
+class TickCounter:
+    """Facility that keeps track of tick count and normal vs error mode"""
+
+    error_mode: bool = False
+    tick: int = 0
+
+    @property
+    def is_request_tick(self) -> bool:
+        """Return True when an API request should be made"""
+        if self.error_mode:
+            return (self.tick in ERROR_TICKS_SEQUENCE) or (self.tick % ERROR_TICKS == 0)
+        return self.tick % REQUEST_TICKS == 0
+
+    def set_normal_mode(self) -> None:
+        """When entering normal mode, reset counter"""
+        if self.error_mode:
+            self.error_mode = False
+            self.tick = 0
+
+    def set_error_mode(self) -> None:
+        """When entering error mode, reset counter"""
+        if not self.error_mode:
+            self.error_mode = True
+            self.tick = 0
+
+    def do_tick(self) -> None:
+        """Increase counter"""
+        self.tick += 1
 
 
 def draw(display: Display, canvas, font) -> None:
@@ -87,18 +119,29 @@ def main() -> None:
     matrix = RGBMatrix(options=options)
     canvas = matrix.CreateFrameCanvas()
 
-    i_request = 0
+    # Event loop
+    display = None
+    tick_counter = TickCounter()
     with Session() as session:
         while True:
-            if not i_request:
-                display = Display.request_new(session=session)
-                LOGGER.debug(display)
-            i_request = (i_request + 1) % REQUEST_MULTIPLIER
+            # Download data from BKK and populate a new Display object
+            if tick_counter.is_request_tick:
+                try:
+                    display = Display.request_new(session=session)
+                    LOGGER.debug(display)
+                    tick_counter.set_normal_mode()
+                except Exception as error:  # Errors should be specified (HTTP, Timeout, Validation)
+                    LOGGER.warning(error)
+                    tick_counter.set_error_mode()
 
-            canvas.Clear()
-            draw(display, canvas, font)
-            canvas = matrix.SwapOnVSync(canvas)
-            time.sleep(REFRESH_SECONDS)
+            # Refresh the canvas and draw contents of the Display object
+            if display:
+                canvas.Clear()
+                draw(display, canvas, font)
+                canvas = matrix.SwapOnVSync(canvas)
+
+            tick_counter.do_tick()
+            time.sleep(TICK_SECONDS)
 
 
 # Main function
