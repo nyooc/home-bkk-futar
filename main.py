@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
+from rgbmatrix import RGBMatrix, RGBMatrixOptions, FrameCanvas, graphics
 from home_bkk_futar.client import Display
 from home_bkk_futar.utils import get_rgb_color
 
@@ -84,7 +84,7 @@ class TickCounter:
         self.tick += 1
 
 
-def draw(display: Display, canvas, font) -> None:
+def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Draw the display contents on the canvas using specified font"""
     for i, line in enumerate(
         display.format(
@@ -103,8 +103,10 @@ def draw(display: Display, canvas, font) -> None:
             )
 
 
-def main() -> None:
-    """Main event loop of home-bkk-futar"""
+def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
+    """Initialize the matrix, canvas and font"""
+
+    LOGGER.info("Home BKK Futar - Initializing")
 
     # Configuration for the matrix
     options = RGBMatrixOptions()
@@ -115,11 +117,17 @@ def main() -> None:
     font = graphics.Font()
     font.LoadFont(f"rpi_rgb_led_matrix/fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf")
 
-    # Matrix initialization
+    # Start up the matrix
     matrix = RGBMatrix(options=options)
     canvas = matrix.CreateFrameCanvas()
 
-    # Event loop
+    return matrix, canvas, font
+
+
+def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
+    """Main event loop of home-bkk-futar"""
+
+    LOGGER.info("Home BKK Futar - Starting event loop (Press CTRL-C to exit)")
     display = None
     tick_counter = TickCounter()
     with Session() as session:
@@ -147,8 +155,7 @@ def main() -> None:
 # Main function
 if __name__ == "__main__":
     try:
-        LOGGER.info("Home BKK Futar - Starting up (Press CTRL-C to exit)")
-        main()
+        loop(*init())
     except KeyboardInterrupt:
         LOGGER.info("Home BKK Futar- Exiting on KeyboardInterrupt")
         sys.exit(0)
