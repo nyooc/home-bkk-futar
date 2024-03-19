@@ -15,23 +15,23 @@ from home_bkk_futar.utils import equal_divide, sign_by_stop_from_string
 # Stops and corresponding strings to use on the display - comes from secret
 SIGN_BY_STOP = sign_by_stop_from_string(os.environ.get("BKK_FUTAR_SIGN_BY_STOP"), "|", ",")
 # Don't display stop times that are leaving (have left) earlier than this, compared to machine time
-MIN_DEPARTURE_SECONDS = -10
+MIN_DEPARTURE_SECONDS: int = -10
 
 # Futar API endpoint settings
-BASE_URL = "https://futar.bkk.hu/api/query/v1/ws"
-ENDPOINT = "/otp/api/where/arrivals-and-departures-for-stop"
+BASE_URL: str = "https://futar.bkk.hu/api/query/v1/ws"
+ENDPOINT: str = "/otp/api/where/arrivals-and-departures-for-stop"
 
 # Packing it up: these will be the GET request parameters going to BKK Futar
-PARAMS = (
+PARAMS: Iterable[tuple[str, Any]] = (
     ("key", os.environ.get("BKK_FUTAR_API_KEY")),
     ("stopId", list(SIGN_BY_STOP.keys())),
     ("minutesBefore", 0),
 )
 
 # Configuration only used when printing a Display object for debugging reasons
-STOP_TIME_SEP = " | "  # Separate elements of a single stop time using this string
-LOCAL_TZ = "Europe/Budapest"  # Show the local and server time in this timezone
-TIME_FORMAT = "%Y-%m-%d %H:%M:%S (UTC%z)"  # Show the local and server time in this format
+STOP_TIME_SEP: str = " | "  # Separate elements of a single stop time using this string
+LOCAL_TZ: str = "Europe/Budapest"  # Show the local and server time in this timezone
+TIME_FORMAT: str = "%Y-%m-%d %H:%M:%S (UTC%z)"  # Show the local and server time in this format
 
 
 class Reliability(Enum):

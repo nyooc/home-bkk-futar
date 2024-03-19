@@ -8,19 +8,19 @@ from zoneinfo import ZoneInfo
 
 # Color will make this many hue loops in a day. Hue is the primary color component in HLS.
 # To make it predictable by the hour, set a multiple of 24, otherwise set some fractional number.
-HUE_CYCLES_PER_DAY = 3.3333 * 24
+HUE_CYCLES_PER_DAY: float = 3.3333 * 24
 
 # Color will make this many saturation loops in a day, plus the saturation bounds can be set here.
 # Low saturation is grey-ish, high saturation is "strong" color.
-SATURATION_CYCLES_PER_DAY = 0.5 * 24
-SATURATION_MIN = 0.1
-SATURATION_MAX = 0.9
+SATURATION_CYCLES_PER_DAY: float = 0.5 * 24
+SATURATION_MIN: float = 0.1
+SATURATION_MAX: float = 0.9
 
 # Color will be lightest at local noon and darkest at local midnight.
 # Bounds and local time zone can be set here.
-LIGHTNESS_MIN = 0.25
-LIGHTNESS_MAX = 0.75
-LOCAL_TZ = "Europe/Budapest"
+LIGHTNESS_MIN: float = 0.25
+LIGHTNESS_MAX: float = 0.75
+LOCAL_TZ: str = "Europe/Budapest"
 
 
 def get_rgb_color(now: dt.datetime) -> tuple[int, int, int]:
