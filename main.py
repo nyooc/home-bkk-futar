@@ -3,6 +3,7 @@
 import datetime as dt
 import logging
 import os
+import signal
 import sys
 import time
 from typing import Optional
@@ -41,9 +42,9 @@ REQUEST_TICKS: int = 3  # In usual mode, make an API request to BKK after each t
 ERROR_TICKS_SEQUENCE: list[int] = [1, 2, 4, 8, 16]  # Make API requests in these ticks (backoff)
 ERROR_TICKS: int = 30  # After backoff, make API requests after each this many ticks
 
-# When should the matrix be enabled and request and show information
+# When should the matrix be enabled: limit for given seconds or use a button on a GPIO (BCM) channel
 ENABLE_FOR_SECONDS: Optional[int] = 600  # Switch off after this many seconds (when None, never)
-ENABLE_UNTIL: Optional[float] = None  # Switch off at this epoch seconds (when None, never)
+BUTTON_CHANNEL: Optional[int] = 26  # Channel, enable on a rising input edge (when None, no button)
 
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
@@ -64,6 +65,10 @@ RGB_MATRIX_OPTIONS = {
     "disable_hardware_pulsing": True,  # led-no-hardware-pulse
     "drop_privileges": True,  # led-no-drop-privs (DEFAULT)
 }
+
+# Globals
+ENABLE_UNTIL: Optional[float] = None
+STATE: Optional[tuple[RGBMatrix, FrameCanvas, graphics.Font]] = None
 
 
 class TickCounter:
@@ -96,20 +101,30 @@ class TickCounter:
         self.tick += 1
 
 
+def on_button_enable(channel: int) -> None:
+    """On a button event, enable running, or if it's already on, extend it"""
+    if ENABLE_UNTIL:
+        LOGGER.debug("Home BKK Futar - Extending event loop")
+        set_enabled_time()
+    else:
+        loop(*STATE)
+
+
+def reset_enabled_time() -> None:
+    """Reset `ENABLE_UNTIL` to None, a.k.a. not running"""
+    global ENABLE_UNTIL
+    ENABLE_UNTIL = None
+
+
 def set_enabled_time() -> None:
     """Based on settings, determine a new value for `ENABLE_UNTIL`"""
     global ENABLE_UNTIL
-    if ENABLE_FOR_SECONDS:
-        ENABLE_UNTIL = time.time() + ENABLE_FOR_SECONDS
-    elif not ENABLE_UNTIL:
-        ENABLE_UNTIL = float("inf")
+    ENABLE_UNTIL = (time.time() + ENABLE_FOR_SECONDS) if ENABLE_FOR_SECONDS else float("inf")
 
 
 def is_enabled_time() -> bool:
     """Based on settings, determine whether right now the display should be enabled"""
-    if ENABLE_UNTIL:
-        return time.time() < ENABLE_UNTIL
-    return False
+    return (time.time() < ENABLE_UNTIL) if ENABLE_UNTIL else False
 
 
 def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
@@ -134,7 +149,6 @@ def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
 
 def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
     """Initialize the matrix, canvas and font"""
-
     LOGGER.info("Home BKK Futar - Initializing")
 
     # Configuration for the matrix
@@ -155,10 +169,9 @@ def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
 
 def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Main event loop of home-bkk-futar"""
-
-    LOGGER.info("Home BKK Futar - Starting event loop (Press CTRL-C to exit)")
-    display = None
     set_enabled_time()
+    LOGGER.debug("Home BKK Futar - Starting event loop")
+    display = None
     tick_counter = TickCounter()
     with Session() as session:
         while is_enabled_time():
@@ -182,15 +195,34 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
             time.sleep(TICK_SECONDS)
 
     # End-of-loop cleanup
-    LOGGER.info("Home BKK Futar - Finishing event loop")
+    LOGGER.debug("Home BKK Futar - Finishing event loop")
     canvas.Clear()
     matrix.SwapOnVSync(canvas)
+    reset_enabled_time()
+
+
+def cleanup(signum: int, frame):
+    """Perform cleanup for a graceful exit and do the exit"""
+    LOGGER.info("Home BKK Futar- Exiting on %s", signal.Signals(signum))
+    if BUTTON_CHANNEL:
+        GPIO.cleanup()
+    sys.exit(0)
 
 
 # Main function
 if __name__ == "__main__":
-    try:
-        loop(*init())
-    except KeyboardInterrupt:
-        LOGGER.info("Home BKK Futar- Exiting on KeyboardInterrupt")
-        sys.exit(0)
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+
+    if BUTTON_CHANNEL:
+        import RPi.GPIO as GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(BUTTON_CHANNEL, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.add_event_detect(BUTTON_CHANNEL, GPIO.RISING, callback=on_button_enable)
+
+        STATE = init()
+        signal.pause()
+
+    else:
+        STATE = init()
+        loop(*STATE)

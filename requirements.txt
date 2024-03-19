@@ -4,3 +4,5 @@ pillow == 10.*
 python-dotenv == 1.*
 # Doesn't work direcly, must install it via running setup.py as instructed in readme
 # rgbmatrix @ git+ssh://git@github.com/hzeller/rpi-rgb-led-matrix.git#egg=rgbmatrix&subdirectory=bindings/python
+# Should exist on your Raspberry, only needed if a switch button is used
+# RPi.GPIO == 0.*
