@@ -33,6 +33,10 @@ REQUEST_TICKS = 3  # In usual mode, make an API request to BKK after each this m
 ERROR_TICKS_SEQUENCE = [1, 2, 4, 8, 16]  # In error mode, make API requests in these ticks (backoff)
 ERROR_TICKS = 30  # In error mode, after backoff, make API requests after each this many ticks
 
+# When should the matrix be enabled and request and show information
+ENABLE_FOR_SECONDS = 600  # Switch off after this many seconds (when None, never switch off)
+ENABLE_UNTIL = None  # Switch off at this epoch seconds, keeps global state, may be set explicitly
+
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
     "rows": 48,  # led-rows
@@ -84,6 +88,22 @@ class TickCounter:
         self.tick += 1
 
 
+def set_enabled_time() -> None:
+    """Based on settings, determine a new value for `ENABLE_UNTIL`"""
+    global ENABLE_UNTIL
+    if ENABLE_FOR_SECONDS:
+        ENABLE_UNTIL = time.time() + ENABLE_FOR_SECONDS
+    elif not ENABLE_UNTIL:
+        ENABLE_UNTIL = float("inf")
+
+
+def is_enabled_time() -> bool:
+    """Based on settings, determine whether right now the display should be enabled"""
+    if ENABLE_UNTIL:
+        return time.time() < ENABLE_UNTIL
+    return False
+
+
 def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Draw the display contents on the canvas using specified font"""
     color = graphics.Color(*get_rgb_color(display.server_time))
@@ -130,9 +150,10 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
 
     LOGGER.info("Home BKK Futar - Starting event loop (Press CTRL-C to exit)")
     display = None
+    set_enabled_time()
     tick_counter = TickCounter()
     with Session() as session:
-        while True:
+        while is_enabled_time():
             # Download data from BKK and populate a new Display object
             if tick_counter.is_request_tick:
                 try:
@@ -151,6 +172,11 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
 
             tick_counter.do_tick()
             time.sleep(TICK_SECONDS)
+
+    # End-of-loop cleanup
+    LOGGER.info("Home BKK Futar - Finishing event loop")
+    canvas.Clear()
+    matrix.SwapOnVSync(canvas)
 
 
 # Main function
