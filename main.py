@@ -21,11 +21,11 @@ from home_bkk_futar.utils import get_rgb_color
 logging.basicConfig(level=os.environ["BKK_FUTAR_LOGGING_LEVEL"])
 LOGGER = logging.getLogger(__name__)
 
-# See rpi_rgb_led_matrix/fonts folder for available {W}x{H}{SUFFIX}.bdf files, or choose your own!
+# Also see rpi_rgb_led_matrix/fonts folder for many more available {W}x{H}{SUFFIX}.bdf files
 FONT_WIDTH: int = 6
 FONT_HEIGHT: int = 12
-FONT_SUFFIX: str = ""
-FONT_PATH: str = f"rpi_rgb_led_matrix/fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf"
+FONT_SUFFIX: str = "mono"
+FONT_PATH: str = f"fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf"
 
 # Indention of text rows relative to origin at upper left
 X_INDENT: int = 2  # Nice to have a left indent - won't harm at right because narrow minute sign: '
