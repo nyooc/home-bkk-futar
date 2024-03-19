@@ -45,6 +45,7 @@ ERROR_TICKS: int = 30  # After backoff, make API requests after each this many t
 # When should the matrix be enabled: limit for given seconds or use a button on a GPIO (BCM) channel
 ENABLE_FOR_SECONDS: Optional[int] = 600  # Switch off after this many seconds (when None, never)
 BUTTON_CHANNEL: Optional[int] = 26  # Channel, enable on a rising input edge (when None, no button)
+BUTTON_TICK_SECONDS: float = 0.05  # When button is enabled, this is the tick length of its loop
 
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
@@ -66,9 +67,8 @@ RGB_MATRIX_OPTIONS = {
     "drop_privileges": True,  # led-no-drop-privs (DEFAULT)
 }
 
-# Globals
+# Global state variable showing the epoch seconds (can be infinity) when display should turn off
 ENABLE_UNTIL: Optional[float] = None
-STATE: Optional[tuple[RGBMatrix, FrameCanvas, graphics.Font]] = None
 
 
 class TickCounter:
@@ -101,23 +101,8 @@ class TickCounter:
         self.tick += 1
 
 
-def on_button_enable(channel: int) -> None:
-    """On a button event, enable running, or if it's already on, extend it"""
-    if ENABLE_UNTIL:
-        LOGGER.debug("Home BKK Futar - Extending event loop")
-        set_enabled_time()
-    else:
-        loop(*STATE)
-
-
-def reset_enabled_time() -> None:
-    """Reset `ENABLE_UNTIL` to None, a.k.a. not running"""
-    global ENABLE_UNTIL
-    ENABLE_UNTIL = None
-
-
-def set_enabled_time() -> None:
-    """Based on settings, determine a new value for `ENABLE_UNTIL`"""
+def set_enabled_time(*args) -> None:
+    """Based on settings, determine a new value for `ENABLE_UNTIL` in the future"""
     global ENABLE_UNTIL
     ENABLE_UNTIL = (time.time() + ENABLE_FOR_SECONDS) if ENABLE_FOR_SECONDS else float("inf")
 
@@ -167,10 +152,9 @@ def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
     return matrix, canvas, font
 
 
-def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
-    """Main event loop of home-bkk-futar"""
-    set_enabled_time()
-    LOGGER.debug("Home BKK Futar - Starting event loop")
+def display_loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
+    """Display loop: handle web requests and display refresh"""
+    LOGGER.debug("Home BKK Futar - Starting display loop")
     display = None
     tick_counter = TickCounter()
     with Session() as session:
@@ -195,10 +179,18 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
             time.sleep(TICK_SECONDS)
 
     # End-of-loop cleanup
-    LOGGER.debug("Home BKK Futar - Finishing event loop")
+    LOGGER.debug("Home BKK Futar - Finishing display loop")
     canvas.Clear()
     matrix.SwapOnVSync(canvas)
-    reset_enabled_time()
+
+
+def button_loop(*state):
+    """Button loop: handle the button press"""
+    LOGGER.info("Home BKK Futar - Starting button loop")
+    while True:
+        if is_enabled_time():
+            display_loop(*state)
+        time.sleep(BUTTON_TICK_SECONDS)
 
 
 def cleanup(signum: int, frame):
@@ -218,11 +210,9 @@ if __name__ == "__main__":
         import RPi.GPIO as GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(BUTTON_CHANNEL, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        GPIO.add_event_detect(BUTTON_CHANNEL, GPIO.RISING, callback=on_button_enable)
-
-        STATE = init()
-        signal.pause()
+        GPIO.add_event_detect(BUTTON_CHANNEL, GPIO.RISING, callback=set_enabled_time)
+        button_loop(*init())
 
     else:
-        STATE = init()
-        loop(*STATE)
+        set_enabled_time()
+        display_loop(*init())
