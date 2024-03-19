@@ -86,6 +86,7 @@ class TickCounter:
 
 def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Draw the display contents on the canvas using specified font"""
+    color = graphics.Color(*get_rgb_color(display.server_time))
     for i, line in enumerate(
         display.format(
             lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
@@ -98,7 +99,7 @@ def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
                 font,
                 X_INDENT,
                 (i + 1) * FONT_HEIGHT + Y_INDENT,
-                graphics.Color(*get_rgb_color(display.server_time)),
+                color,
                 line,
             )
 
