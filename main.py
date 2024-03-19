@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Direct RGB Matrix manipulation, main event loop of home-bkk-futar"""
+import datetime as dt
 import logging
 import os
 import sys
@@ -27,6 +28,10 @@ FONT_SUFFIX: str = ""
 # Indention of text rows relative to origin at upper left
 X_INDENT: int = 2  # Nice to have a left indent - won't harm at right because narrow minute sign: '
 Y_INDENT: int = -2  # Helps center text for high fonts that have no pixels at the top such as 6x12
+
+# Latency bars show the age of the display (meant for error mode when display is getting old)
+LATENCY_BAR_SECONDS: Optional[int] = 60  # For each this many seconds, draw one latency bar
+LATENCY_BAR_Y_INDENT: int = 0  # Draw the latency bars at this pixel offset
 
 # API request & canvas refresh timing
 TICK_SECONDS: int = 10  # Time between ticks (canvas updates)
@@ -109,6 +114,12 @@ def is_enabled_time() -> bool:
 
 def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Draw the display contents on the canvas using specified font"""
+
+    def get_latency_bars() -> int:
+        """Calculate the proper number of latency bars to draw"""
+        latency_seconds = (dt.datetime.now(tz=dt.timezone.utc) - display.server_time).seconds
+        return max(min(latency_seconds // LATENCY_BAR_SECONDS, chars), 0)
+
     color = graphics.Color(*get_rgb_color(display.server_time))
     lines = RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT
     chars = RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH
@@ -116,6 +127,9 @@ def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
     for i, line in enumerate(display.format(lines=lines, chars=chars)):
         if line:
             graphics.DrawText(canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line)
+
+    if LATENCY_BAR_SECONDS and (latency_bars := get_latency_bars()):
+        graphics.DrawText(canvas, font, X_INDENT, LATENCY_BAR_Y_INDENT, color, "_" * latency_bars)
 
 
 def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
