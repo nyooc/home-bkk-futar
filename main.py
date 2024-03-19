@@ -21,10 +21,11 @@ from home_bkk_futar.utils import get_rgb_color
 logging.basicConfig(level=os.environ["BKK_FUTAR_LOGGING_LEVEL"])
 LOGGER = logging.getLogger(__name__)
 
-# See rpi_rgb_led_matrix/fonts folder for available {W}x{H}{SUFFIX}.bdf files
+# See rpi_rgb_led_matrix/fonts folder for available {W}x{H}{SUFFIX}.bdf files, or choose your own!
 FONT_WIDTH: int = 6
 FONT_HEIGHT: int = 12
 FONT_SUFFIX: str = ""
+FONT_PATH: str = f"rpi_rgb_led_matrix/fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf"
 
 # Indention of text rows relative to origin at upper left
 X_INDENT: int = 2  # Nice to have a left indent - won't harm at right because narrow minute sign: '
@@ -104,7 +105,12 @@ class TickCounter:
 def set_enabled_time(*args) -> None:
     """Based on settings, determine a new value for `ENABLE_UNTIL` in the future"""
     global ENABLE_UNTIL
-    ENABLE_UNTIL = (time.time() + ENABLE_FOR_SECONDS) if ENABLE_FOR_SECONDS else float("inf")
+    if ENABLE_FOR_SECONDS:
+        LOGGER.debug("Extending enabled time for %d seconds from now", ENABLE_FOR_SECONDS)
+        ENABLE_UNTIL = (time.time() + ENABLE_FOR_SECONDS)
+    else:
+        LOGGER.debug("Extending enabled time to forever")
+        ENABLE_UNTIL = float("inf")
 
 
 def is_enabled_time() -> bool:
@@ -134,7 +140,7 @@ def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
 
 def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
     """Initialize the matrix, canvas and font"""
-    LOGGER.info("Home BKK Futar - Initializing")
+    LOGGER.info("Initializing - using font path: %s", FONT_PATH)
 
     # Configuration for the matrix
     options = RGBMatrixOptions()
@@ -143,7 +149,7 @@ def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
 
     # Load the font
     font = graphics.Font()
-    font.LoadFont(f"rpi_rgb_led_matrix/fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf")
+    font.LoadFont(FONT_PATH)
 
     # Start up the matrix
     matrix = RGBMatrix(options=options)
@@ -154,7 +160,7 @@ def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
 
 def display_loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Display loop: handle web requests and display refresh"""
-    LOGGER.debug("Home BKK Futar - Starting display loop")
+    LOGGER.info("Starting display loop")
     display = None
     tick_counter = TickCounter()
     with Session() as session:
@@ -179,14 +185,14 @@ def display_loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) ->
             time.sleep(TICK_SECONDS)
 
     # End-of-loop cleanup
-    LOGGER.debug("Home BKK Futar - Finishing display loop")
+    LOGGER.info("Finishing display loop")
     canvas.Clear()
     matrix.SwapOnVSync(canvas)
 
 
 def button_loop(*state):
     """Button loop: handle the button press"""
-    LOGGER.info("Home BKK Futar - Starting button loop")
+    LOGGER.info("Starting button loop")
     while True:
         if is_enabled_time():
             display_loop(*state)
@@ -195,7 +201,7 @@ def button_loop(*state):
 
 def cleanup(signum: int, frame):
     """Perform cleanup for a graceful exit and do the exit"""
-    LOGGER.info("Home BKK Futar- Exiting on %s", signal.Signals(signum))
+    LOGGER.info("Exiting on %s", signal.Signals(signum))
     if BUTTON_CHANNEL:
         GPIO.cleanup()
     sys.exit(0)
