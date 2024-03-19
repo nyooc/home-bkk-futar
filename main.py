@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+from typing import Optional
 from requests import Session
 from dotenv import load_dotenv
 
@@ -19,23 +20,25 @@ logging.basicConfig(level=os.environ["BKK_FUTAR_LOGGING_LEVEL"])
 LOGGER = logging.getLogger(__name__)
 
 # See rpi_rgb_led_matrix/fonts folder for available {W}x{H}{SUFFIX}.bdf files
-FONT_WIDTH = 6
-FONT_HEIGHT = 12
-FONT_SUFFIX = ""
+FONT_WIDTH: int = 6
+FONT_HEIGHT: int = 12
+FONT_SUFFIX: str = ""
 
 # Indention of text rows relative to origin at upper left
-X_INDENT = 2  # This many columns at left will be blank - won't harm at right, apostrophe is small
-Y_INDENT = -2  # Helps center the text for high fonts that have no pixels at the top such as 6x12
+X_INDENT: int = 2  # Nice to have a left indent - won't harm at right because narrow minute sign: '
+Y_INDENT: int = -2  # Helps center text for high fonts that have no pixels at the top such as 6x12
 
 # API request & canvas refresh timing
-TICK_SECONDS = 10  # Time between ticks (canvas updates)
-REQUEST_TICKS = 3  # In usual mode, make an API request to BKK after each this many ticks
-ERROR_TICKS_SEQUENCE = [1, 2, 4, 8, 16]  # In error mode, make API requests in these ticks (backoff)
-ERROR_TICKS = 30  # In error mode, after backoff, make API requests after each this many ticks
+TICK_SECONDS: int = 10  # Time between ticks (canvas updates)
+REQUEST_TICKS: int = 3  # In usual mode, make an API request to BKK after each this many ticks
+
+# Error mode: when some error occurs while requesting BKK
+ERROR_TICKS_SEQUENCE: list[int] = [1, 2, 4, 8, 16]  # Make API requests in these ticks (backoff)
+ERROR_TICKS: int = 30  # After backoff, make API requests after each this many ticks
 
 # When should the matrix be enabled and request and show information
-ENABLE_FOR_SECONDS = 600  # Switch off after this many seconds (when None, never switch off)
-ENABLE_UNTIL = None  # Switch off at this epoch seconds, keeps global state, may be set explicitly
+ENABLE_FOR_SECONDS: Optional[int] = 600  # Switch off after this many seconds (when None, never)
+ENABLE_UNTIL: Optional[float] = None  # Switch off at this epoch seconds (when None, never)
 
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
@@ -107,21 +110,12 @@ def is_enabled_time() -> bool:
 def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Draw the display contents on the canvas using specified font"""
     color = graphics.Color(*get_rgb_color(display.server_time))
-    for i, line in enumerate(
-        display.format(
-            lines=RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT,
-            chars=RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH,
-        )
-    ):
+    lines = RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT
+    chars = RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH
+
+    for i, line in enumerate(display.format(lines=lines, chars=chars)):
         if line:
-            graphics.DrawText(
-                canvas,
-                font,
-                X_INDENT,
-                (i + 1) * FONT_HEIGHT + Y_INDENT,
-                color,
-                line,
-            )
+            graphics.DrawText(canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line)
 
 
 def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
