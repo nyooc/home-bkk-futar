@@ -1,0 +1,17 @@
+[Unit]
+Description=Home BKK Futar matrix display
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+RemainAfterExit=no
+Restart=no
+ExecStart=python -m main
+WorkingDirectory=/home/nyooc/Dev/home-bkk-futar/
+StandardOutput=journal
+StandardError=journal
+User=root
+
+[Install]
+WantedBy=multi-user.target
