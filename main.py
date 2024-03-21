@@ -43,11 +43,6 @@ REQUEST_TICKS: int = 3  # In usual mode, make an API request to BKK after each t
 ERROR_TICKS_SEQUENCE: list[int] = [1, 2, 4, 8, 16]  # Make API requests in these ticks (backoff)
 ERROR_TICKS: int = 30  # After backoff, make API requests after each this many ticks
 
-# When should the matrix be enabled: limit for given seconds or use a button on a GPIO (BCM) channel
-ENABLE_FOR_SECONDS: Optional[int] = 600  # Switch off after this many seconds (when None, never)
-BUTTON_CHANNEL: Optional[int] = 26  # Channel, enable on a rising input edge (when None, no button)
-BUTTON_TICK_SECONDS: float = 0.05  # When button is enabled, this is the tick length of its loop
-
 # RGBMatrixOptions elements to pass, for clarity here we include params with default values, too
 RGB_MATRIX_OPTIONS = {
     "rows": 48,  # led-rows
@@ -67,9 +62,6 @@ RGB_MATRIX_OPTIONS = {
     "disable_hardware_pulsing": True,  # led-no-hardware-pulse
     "drop_privileges": True,  # led-no-drop-privs (DEFAULT)
 }
-
-# Global state variable showing the epoch seconds (can be infinity) when display should turn off
-ENABLE_UNTIL: Optional[float] = None
 
 
 class TickCounter:
@@ -100,22 +92,6 @@ class TickCounter:
     def do_tick(self) -> None:
         """Increase counter"""
         self.tick += 1
-
-
-def set_enabled_time(*args) -> None:
-    """Based on settings, determine a new value for `ENABLE_UNTIL` in the future"""
-    global ENABLE_UNTIL
-    if ENABLE_FOR_SECONDS:
-        LOGGER.debug("Extending enabled time for %d seconds from now", ENABLE_FOR_SECONDS)
-        ENABLE_UNTIL = (time.time() + ENABLE_FOR_SECONDS)
-    else:
-        LOGGER.debug("Extending enabled time to forever")
-        ENABLE_UNTIL = float("inf")
-
-
-def is_enabled_time() -> bool:
-    """Based on settings, determine whether right now the display should be enabled"""
-    return (time.time() < ENABLE_UNTIL) if ENABLE_UNTIL else False
 
 
 def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
@@ -158,13 +134,13 @@ def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
     return matrix, canvas, font
 
 
-def display_loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
+def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
     """Display loop: handle web requests and display refresh"""
     LOGGER.info("Starting display loop")
     display = None
     tick_counter = TickCounter()
     with Session() as session:
-        while is_enabled_time():
+        while True:
             # Download data from BKK and populate a new Display object
             if tick_counter.is_request_tick:
                 try:
@@ -184,26 +160,10 @@ def display_loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) ->
             tick_counter.do_tick()
             time.sleep(TICK_SECONDS)
 
-    # End-of-loop cleanup
-    LOGGER.info("Finishing display loop")
-    canvas.Clear()
-    matrix.SwapOnVSync(canvas)
-
-
-def button_loop(*state):
-    """Button loop: handle the button press"""
-    LOGGER.info("Starting button loop")
-    while True:
-        if is_enabled_time():
-            display_loop(*state)
-        time.sleep(BUTTON_TICK_SECONDS)
-
 
 def cleanup(signum: int, frame):
-    """Perform cleanup for a graceful exit and do the exit"""
+    """Catch termination signal and do the exit"""
     LOGGER.info("Exiting on %s", signal.Signals(signum))
-    if BUTTON_CHANNEL:
-        GPIO.cleanup()
     sys.exit(0)
 
 
@@ -211,14 +171,4 @@ def cleanup(signum: int, frame):
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
-
-    if BUTTON_CHANNEL:
-        import RPi.GPIO as GPIO
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(BUTTON_CHANNEL, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        GPIO.add_event_detect(BUTTON_CHANNEL, GPIO.RISING, callback=set_enabled_time)
-        button_loop(*init())
-
-    else:
-        set_enabled_time()
-        display_loop(*init())
+    loop(*init())
