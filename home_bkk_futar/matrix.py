@@ -3,6 +3,8 @@
 import datetime as dt
 import logging
 import os
+import signal
+import sys
 import time
 from typing import Optional
 
@@ -13,6 +15,7 @@ from home_bkk_futar.client import Display
 from home_bkk_futar.utils import get_rgb_color
 
 
+# Set logging with a level acquired from environment variable
 logging.basicConfig(level=os.environ["BKK_FUTAR_LOGGING_LEVEL"])
 LOGGER = logging.getLogger(__name__)
 
@@ -57,6 +60,9 @@ RGB_MATRIX_OPTIONS = {
     "disable_hardware_pulsing": True,  # led-no-hardware-pulse
     "drop_privileges": True,  # led-no-drop-privs (DEFAULT)
 }
+
+# Global matrix display state
+STATE: Optional[tuple[RGBMatrix, FrameCanvas, graphics.Font]] = None
 
 
 class TickCounter:
@@ -156,6 +162,21 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
             time.sleep(TICK_SECONDS)
 
 
+def cleanup(signum: int, frame):
+    """Catch termination signal, clear the matrix, and exit"""
+    LOGGER.info("Exiting on %s", signal.Signals(signum))
+    if STATE:
+        matrix, canvas, _ = STATE
+        canvas.Clear()
+        matrix.SwapOnVSync(canvas)
+
+    sys.exit(0)
+
+
 def run() -> None:
     """Initialize and run the loop"""
-    loop(*init())
+    global STATE
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+    STATE = init()
+    loop(*STATE)
