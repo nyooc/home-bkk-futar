@@ -165,10 +165,9 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
 def cleanup(signum: int, frame):
     """Catch termination signal, clear the matrix, and exit"""
     LOGGER.info("Exiting on %s", signal.Signals(signum))
-    if STATE:
-        matrix, canvas, _ = STATE
-        canvas.Clear()
-        matrix.SwapOnVSync(canvas)
+    matrix, canvas, _ = STATE
+    canvas.Clear()
+    matrix.SwapOnVSync(canvas)
 
     sys.exit(0)
 
@@ -176,7 +175,7 @@ def cleanup(signum: int, frame):
 def run() -> None:
     """Initialize and run the loop"""
     global STATE
+    STATE = init()
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
-    STATE = init()
     loop(*STATE)
