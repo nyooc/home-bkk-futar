@@ -23,17 +23,33 @@ LOGGER = logging.getLogger(__name__)
 ENABLE_FOR_SECONDS: Optional[int] = 600  # Switch off after this many seconds
 BUTTON_CHANNEL: Optional[int] = 26  # Channel, enable on a rising input edge
 TICK_SECONDS: float = 0.1  # Time between ticks (matrix and button checks)
+BUTTON_MAX_SECONDS: float = 1.0  # Max time between two consecutive presses that we accept as real
 
 # Global state variables
 ENABLED_UNTIL: Optional[float] = None  # Epoch seconds when display should turn off
+BUTTON_LAST_PRESSED_AT: Optional[float] = None  # Epoch seconds when button was last pressed
 MATRIX: Optional[Process] = None  # Process holding the matrix loop
 
 
-def set_enabled_time(*args) -> None:
+def on_button_press(_: int) -> None:
+    """Only set enabled time if button experienced two consecutive presses"""
+    global BUTTON_LAST_PRESSED_AT
+    button_last_pressed_at = BUTTON_LAST_PRESSED_AT
+    BUTTON_LAST_PRESSED_AT = time.time()
+    if button_last_pressed_at:
+        diff_seconds = BUTTON_LAST_PRESSED_AT - button_last_pressed_at
+        LOGGER.debug("Button press, last pressed %.3f seconds ago", diff_seconds)
+        if diff_seconds <= BUTTON_MAX_SECONDS:
+            set_enabled_time()
+    else:
+        LOGGER.debug("Button press, never pressed before")
+
+
+def set_enabled_time() -> None:
     """Based on settings, determine a new value for `ENABLED_UNTIL` in the future"""
     global ENABLED_UNTIL
     LOGGER.debug("Setting enabled time for %d seconds from now", ENABLE_FOR_SECONDS)
-    ENABLED_UNTIL = time.time() + ENABLE_FOR_SECONDS
+    ENABLED_UNTIL = BUTTON_LAST_PRESSED_AT + ENABLE_FOR_SECONDS
 
 
 def is_enabled_time() -> bool:
@@ -70,5 +86,5 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, cleanup)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(BUTTON_CHANNEL, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-    GPIO.add_event_detect(BUTTON_CHANNEL, GPIO.RISING, callback=set_enabled_time)
+    GPIO.add_event_detect(BUTTON_CHANNEL, GPIO.BOTH, callback=on_button_press)
     loop()
