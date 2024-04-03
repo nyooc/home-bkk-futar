@@ -11,7 +11,7 @@ from typing import Optional
 from requests import Session
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, FrameCanvas, graphics
 
-from home_bkk_futar.client import Display
+from home_bkk_futar.client import DisplayInfo
 from home_bkk_futar.utils import get_rgb_color
 
 
@@ -29,7 +29,7 @@ FONT_PATH: str = f"fonts/{FONT_WIDTH}x{FONT_HEIGHT}{FONT_SUFFIX}.bdf"
 X_INDENT: int = 2  # Nice to have a left indent - won't harm at right because narrow minute sign: '
 Y_INDENT: int = -2  # Helps center text for high fonts that have no pixels at the top such as 6x12
 
-# Latency bars show the age of the display (meant for error mode when display is getting old)
+# Latency bars show the age of the display (meant for error mode when displayed info is getting old)
 LATENCY_BAR_SECONDS: Optional[int] = 60  # For each this many seconds, draw one latency bar
 LATENCY_BAR_Y_INDENT: int = 0  # Draw the latency bars at this pixel offset
 
@@ -95,19 +95,19 @@ class TickCounter:
         self.tick += 1
 
 
-def draw(display: Display, canvas: FrameCanvas, font: graphics.Font) -> None:
-    """Draw the display contents on the canvas using specified font"""
+def draw(display_info: DisplayInfo, canvas: FrameCanvas, font: graphics.Font) -> None:
+    """Draw the display info contents on the canvas using specified font"""
 
     def get_latency_bars() -> int:
         """Calculate the proper number of latency bars to draw"""
-        latency_seconds = (dt.datetime.now(tz=dt.timezone.utc) - display.server_time).seconds
+        latency_seconds = (dt.datetime.now(tz=dt.timezone.utc) - display_info.server_time).seconds
         return max(min(latency_seconds // LATENCY_BAR_SECONDS, chars), 0)
 
-    color = graphics.Color(*get_rgb_color(display.server_time))
+    color = graphics.Color(*get_rgb_color(display_info.server_time))
     lines = RGB_MATRIX_OPTIONS["rows"] // FONT_HEIGHT
     chars = RGB_MATRIX_OPTIONS["cols"] // FONT_WIDTH
 
-    for i, line in enumerate(display.format(lines=lines, chars=chars)):
+    for i, line in enumerate(display_info.format(lines=lines, chars=chars)):
         if line:
             graphics.DrawText(canvas, font, X_INDENT, (i + 1) * FONT_HEIGHT + Y_INDENT, color, line)
 
@@ -136,26 +136,26 @@ def init() -> tuple[RGBMatrix, FrameCanvas, graphics.Font]:
 
 
 def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
-    """Display loop: handle web requests and display refresh"""
+    """Display loop: handle web requests and canvas refresh"""
     LOGGER.info("Starting display loop")
-    display = None
+    display_info = None
     tick_counter = TickCounter()
     with Session() as session:
         while True:
-            # Download data from BKK and populate a new Display object
+            # Download data from BKK and populate a new `DisplayInfo` object
             if tick_counter.is_request_tick:
                 try:
-                    display = Display.request_new(session=session)
-                    LOGGER.debug(display)
+                    display_info = DisplayInfo.request(session=session)
+                    LOGGER.debug(display_info)
                     tick_counter.set_normal_mode()
                 except Exception as error:  # Errors should be specified (HTTP, Timeout, Validation)
                     LOGGER.warning(error)
                     tick_counter.set_error_mode()
 
-            # Refresh the canvas and draw contents of the Display object
-            if display:
+            # Refresh the canvas and draw contents of the `DisplayInfo` object
+            if display_info:
                 canvas.Clear()
-                draw(display, canvas, font)
+                draw(display_info, canvas, font)
                 canvas = matrix.SwapOnVSync(canvas)
 
             tick_counter.do_tick()

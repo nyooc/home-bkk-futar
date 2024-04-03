@@ -28,7 +28,7 @@ PARAMS: Iterable[tuple[str, Any]] = (
     ("minutesBefore", 0),
 )
 
-# Configuration only used when printing a Display object for debugging reasons
+# Configuration only used when printing a `DisplayInfo` object for debugging reasons
 STOP_TIME_SEP: str = " | "  # Separate elements of a single stop time using this string
 LOCAL_TZ: str = "Europe/Budapest"  # Show the local and server time in this timezone
 TIME_FORMAT: str = "%Y-%m-%d %H:%M:%S (UTC%z)"  # Show the local and server time in this format
@@ -95,7 +95,7 @@ class StopTime(BaseModel):
         )
 
 
-class Display(BaseModel):
+class DisplayInfo(BaseModel):
     """Central structure, holds all needed stop times to display, plus the current server time"""
 
     server_time: AwareDatetime
@@ -112,7 +112,9 @@ class Display(BaseModel):
         )
 
     @classmethod
-    def from_response(cls, response: ArrivalsAndDeparturesForStopOTPMethodResponse) -> "Display":
+    def from_response(
+        cls, response: ArrivalsAndDeparturesForStopOTPMethodResponse
+    ) -> "DisplayInfo":
         """Transform & filter all needed info for the display from a response object"""
         stop_times = []
         # Loop through mentioned stop times in same order as in response
@@ -144,25 +146,25 @@ class Display(BaseModel):
         return cls(server_time=response.currentTime, stop_times=stop_times)
 
     @classmethod
-    def request_new(
+    def request(
         cls,
         params: Union[dict[str, Any], Iterable[tuple[str, Any]]] = PARAMS,
         session: Optional[Session] = None,
-    ) -> "Display":
-        """Make a new request and derive the display object from it"""
+    ) -> "DisplayInfo":
+        """Make a new request and derive the `DisplayInfo` object from it"""
 
-        def display_from_session(session: Session):
+        def display_info_from_session(session: Session):
             """Do the request itself inside the session context"""
             response = session.get(BASE_URL + ENDPOINT, params=dict(params))
             response.raise_for_status()
-            return Display.from_response(
+            return DisplayInfo.from_response(
                 ArrivalsAndDeparturesForStopOTPMethodResponse(**response.json())
             )
 
         if not session:
             with Session() as session:
-                return display_from_session(session)
-        return display_from_session(session)
+                return display_info_from_session(session)
+        return display_info_from_session(session)
 
     def get_upcoming_stop_times(
         self, min_departure_seconds: int = MIN_DEPARTURE_SECONDS
