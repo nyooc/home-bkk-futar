@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Configuration for button operation
 ENABLE_FOR_SECONDS: Optional[int] = 600  # Switch off after this many seconds
-BUTTON_CHANNEL: Optional[int] = 26  # Channel, enable on a rising input edge
+BUTTON_CHANNEL: Optional[int] = 26  # Broadcom GPIO channel of the button
 TICK_SECONDS: float = 0.1  # Time between ticks (matrix and button checks)
 BUTTON_MAX_SECONDS: float = 1.0  # Max time between two consecutive presses that we accept as real
 

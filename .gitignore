@@ -194,6 +194,7 @@ ipython_config.py
 *.xlsx
 *.svg
 *.png
+*.jpg
 *.pkl
 *.pckl
 *.pickle
@@ -204,3 +205,4 @@ ipython_config.py
 # Folders
 api
 data
+!assets/*
