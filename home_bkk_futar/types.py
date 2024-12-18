@@ -65,7 +65,7 @@ class TransitAlert(BaseModel):
 
     id: str
     start: dt.datetime
-    end: dt.datetime
+    end: Optional[dt.datetime] = None  # Spec marks as mandatory, in reality it's not
     timestamp: dt.datetime
     modifiedTime: dt.datetime
     stopIds: list[str]
