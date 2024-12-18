@@ -1,13 +1,12 @@
 """BKK Futar API Client"""
 
 import datetime as dt
-import json
 import os
 from zoneinfo import ZoneInfo
 from enum import Enum
 from typing import Any, Iterable, Optional, Union
 
-from pydantic import BaseModel, AwareDatetime, ValidationError
+from pydantic import BaseModel, AwareDatetime
 from requests import Session
 
 from home_bkk_futar.types import ArrivalsAndDeparturesForStopOTPMethodResponse
@@ -33,10 +32,6 @@ PARAMS: Iterable[tuple[str, Any]] = (
 STOP_TIME_SEP: str = " | "  # Separate elements of a single stop time using this string
 LOCAL_TZ: str = "Europe/Budapest"  # Show the local and server time in this timezone
 TIME_FORMAT: str = "%Y-%m-%d %H:%M:%S (UTC%z)"  # Show the local and server time in this format
-
-# Folder and file format used when saving a response JSON that didn't pass the Pydantic validator
-LOG_DIR_PATH = "logs/"  # Will be created when doesn't exist, beneficial to have this in gitignore
-LOG_FILE_FORMAT = "%y%m%d_%H%M%S.json"  # Local datetime will be formatted with this using strftime
 
 
 class Reliability(Enum):
@@ -162,19 +157,9 @@ class DisplayInfo(BaseModel):
             """Do the request itself inside the session context, save JSON if validation fails"""
             response = session.get(BASE_URL + ENDPOINT, params=dict(params))
             response.raise_for_status()
-            response_json = response.json()
-            try:
-                return DisplayInfo.from_response(
-                    ArrivalsAndDeparturesForStopOTPMethodResponse(**response_json)
-                )
-            except ValidationError:
-                os.makedirs(LOG_DIR_PATH, exist_ok=True)
-                log_path = os.path.join(
-                    LOG_DIR_PATH, dt.datetime.now(tz=ZoneInfo(LOCAL_TZ)).strftime(LOG_FILE_FORMAT)
-                )
-                with open(log_path, "w") as file:
-                    json.dump(response_json, file)
-                raise
+            return DisplayInfo.from_response(
+                ArrivalsAndDeparturesForStopOTPMethodResponse(**response.json())
+            )
 
         if not session:
             with Session() as session:

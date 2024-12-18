@@ -149,7 +149,7 @@ def loop(matrix: RGBMatrix, canvas: FrameCanvas, font: graphics.Font) -> None:
                     LOGGER.debug(display_info)
                     tick_counter.set_normal_mode()
                 except Exception as error:  # Errors should be specified (HTTP, Timeout, Validation)
-                    LOGGER.warning(error)
+                    LOGGER.exception(error)
                     tick_counter.set_error_mode()
 
             # Refresh the canvas and draw contents of the `DisplayInfo` object
